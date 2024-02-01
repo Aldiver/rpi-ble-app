@@ -140,7 +140,7 @@ class Characteristic(dbus.service.Object):
     org.bluez.GattCharacteristic1 interface implementation
     """
     def __init__(self, service, uuid, flags):
-        index = service.get_next_index()
+        index = len(service.characteristics)
         self.path = service.path + '/char' + str(index)
         self.bus = service.get_bus()
         self.uuid = uuid
@@ -217,12 +217,6 @@ class Characteristic(dbus.service.Object):
         bus = self.bus
 
         return bus
-
-    def get_next_index(self):
-        idx = self.next_index
-        self.next_index += 1
-
-        return idx
 
     def add_timeout(self, timeout, callback):
         GObject.timeout_add(timeout, callback)
