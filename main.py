@@ -84,8 +84,8 @@ class InboundCharacteristic(Characteristic):
 
     def __init__(self, service, uuid, flags):
         Characteristic.__init__(
-                self, uuid,
-                flags, service)
+                self, service, uuid,
+                flags, )
         self.add_descriptor(RaspberryDescriptor(self, "2901", "Alert Descriptor", self.flags))
 
     def WriteValue(self, value, options):
