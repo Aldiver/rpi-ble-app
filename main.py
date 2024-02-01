@@ -7,22 +7,24 @@ from ble_core.service import Application, Service, Characteristic, Descriptor
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 NOTIFY_TIMEOUT = 5000
 
-class ThermometerAdvertisement(Advertisement):
+class SensorAdvertisement(Advertisement):
     def __init__(self, index):
         Advertisement.__init__(self, index, "peripheral")
         self.add_local_name("Raspberry Pi 0") 
         self.include_tx_power = True
 
 class ThermometerService(Service):
-    THERMOMETER_SVC_UUID = "00000001-710e-4a5b-8d75-3e5b444bc3cf"
+    RASPBERRY_SVC_UUID = "00000001-710e-4a5b-8d75-3e5b444bc3cf"
 
     def __init__(self, index):
         self.farenheit = True
 
-        Service.__init__(self, index, self.THERMOMETER_SVC_UUID, True)
-        self.add_characteristic(TempCharacteristic(self))
-        self.add_characteristic(TempCharacteristic2(self))
-        self.add_characteristic(UnitCharacteristic(self))
+        Service.__init__(self, index, self.RASPBERRY_SVC_UUID, True)
+        self.add_characteristic(OutboundCharacteristic(self, "00000002-710e-4a5b-8d75-3e5b444bc3cf", ["read", "notify"]))
+        self.add_characteristic(OutboundCharacteristic(self, "00000003-710e-4a5b-8d75-3e5b444bc3cf", ["read", "notify"]))
+        self.add_characteristic(OutboundCharacteristic(self, "00000004-710e-4a5b-8d75-3e5b444bc3cf", ["read", "notify"]))
+        self.add_characteristic(OutboundCharacteristic(self, "00000005-710e-4a5b-8d75-3e5b444bc3cf", ["read", "notify"]))
+        self.add_characteristic(InboundCharacteristic(self, "00000006-710e-4a5b-8d75-3e5b444bc3cf", ["read", "write"]))
 
     def is_farenheit(self):
         return self.farenheit
@@ -30,28 +32,26 @@ class ThermometerService(Service):
     def set_farenheit(self, farenheit):
         self.farenheit = farenheit
 
-class TempCharacteristic(Characteristic):
-    TEMP_CHARACTERISTIC_UUID = "00000002-710e-4a5b-8d75-3e5b444bc3cf"
+class OutboundCharacteristic(Characteristic):
 
-    def __init__(self, service):
-        self.notifying = False
+    def __init__(self, service, uuid, flags):
+        self.uuid = uuid
+        self.flags = flags
+        self.service = service
+        if "notify" in flags:
+            self.notifying = False
+        else:
+            self.notifying = True
 
         Characteristic.__init__(
-                self, self.TEMP_CHARACTERISTIC_UUID,
-                ["notify", "read"], service)
-        self.add_descriptor(TempDescriptor(self))
+                self, self.uuid,
+                self.flags, self.service)
+        self.add_descriptor(RaspberryDescriptor(self, "2901", "Temperature Descriptor", self.flags))
 
-    def get_temperature(self):
+    def get_sensor_value(self):
         value = []
-        unit = "C"
-
-        # cpu = CPUTemperature()
         temp = 100
-        if self.service.is_farenheit():
-            temp = (temp * 1.8) + 32
-            unit = "F"
-
-        strtemp = str(round(temp, 1)) + " " + unit
+        strtemp = str(round(temp, 1))
         for c in strtemp:
             value.append(dbus.Byte(c.encode()))
 
@@ -59,8 +59,7 @@ class TempCharacteristic(Characteristic):
 
     def set_temperature_callback(self):
         if self.notifying:
-            print("callback working")
-            value = self.get_temperature()
+            value = self.get_sensor_value()
             self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
 
         return self.notifying
@@ -71,9 +70,8 @@ class TempCharacteristic(Characteristic):
 
         self.notifying = True
 
-        value = self.get_temperature()
+        value = self.get_sensor_value()
         self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
-        print("help")
         self.add_timeout(NOTIFY_TIMEOUT, self.set_temperature_callback)
 
     def StopNotify(self):
@@ -81,141 +79,42 @@ class TempCharacteristic(Characteristic):
 
     def ReadValue(self, options):
         print("read")
-        value = self.get_temperature()
+        value = self.get_sensor_value()
 
         return value
 
-class TempDescriptor(Descriptor):
-    TEMP_DESCRIPTOR_UUID = "2901"
-    TEMP_DESCRIPTOR_VALUE = "CPU Temperature"
+class InboundCharacteristic(Characteristic):
 
-    def __init__(self, characteristic):
-        Descriptor.__init__(
-                self, self.TEMP_DESCRIPTOR_UUID,
-                ["read"],
-                characteristic)
-
-    def ReadValue(self, options):
-        value = []
-        desc = self.TEMP_DESCRIPTOR_VALUE
-
-        for c in desc:
-            value.append(dbus.Byte(c.encode()))
-
-        return value
-
-class TempCharacteristic2(Characteristic):
-    TEMP_CHARACTERISTIC_UUID = "00000003-710e-4a5b-8d75-3e5b444bc3cf"
-
-    def __init__(self, service):
-        self.notifying = False
-
+    def __init__(self, service, uuid, flags):
+        self.uuid
+        self.flags
         Characteristic.__init__(
-                self, self.TEMP_CHARACTERISTIC_UUID,
-                ["notify", "read"], service)
-        self.add_descriptor(TempDescriptor(self))
-
-    def get_temperature(self):
-        value = []
-        unit = "C"
-
-        # cpu = CPUTemperature()
-        temp = 100
-        if self.service.is_farenheit():
-            temp = (temp * 1.8) + 32
-            unit = "F"
-
-        strtemp = str(round(temp, 1)) + " " + unit
-        for c in strtemp:
-            value.append(dbus.Byte(c.encode()))
-
-        return value
-
-    def set_temperature_callback(self):
-        if self.notifying:
-            print("callback working2")
-            value = self.get_temperature()
-            self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
-
-        return self.notifying
-
-    def StartNotify(self):
-        if self.notifying:
-            return
-
-        self.notifying = True
-
-        value = self.get_temperature()
-        self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
-        print("help")
-        self.add_timeout(NOTIFY_TIMEOUT, self.set_temperature_callback)
-
-    def StopNotify(self):
-        self.notifying = False
-
-    def ReadValue(self, options):
-        print("read")
-        value = self.get_temperature()
-
-        return value
-
-class TempDescriptor2(Descriptor):
-    TEMP_DESCRIPTOR_UUID = "2901"
-    TEMP_DESCRIPTOR_VALUE = "CPU Temperature"
-
-    def __init__(self, characteristic):
-        Descriptor.__init__(
-                self, self.TEMP_DESCRIPTOR_UUID,
-                ["read"],
-                characteristic)
-
-    def ReadValue(self, options):
-        value = []
-        desc = self.TEMP_DESCRIPTOR_VALUE
-
-        for c in desc:
-            value.append(dbus.Byte(c.encode()))
-
-        return value
-
-class UnitCharacteristic(Characteristic):
-    UNIT_CHARACTERISTIC_UUID = "00000003-710e-4a5b-8d75-3e5b444bc3cf"
-
-    def __init__(self, service):
-        Characteristic.__init__(
-                self, self.UNIT_CHARACTERISTIC_UUID,
+                self, self.uuid,
                 ["read", "write"], service)
-        self.add_descriptor(UnitDescriptor(self))
+        self.add_descriptor(RaspberryDescriptor(self, "2901", "Alert Descriptor", self.flags))
 
     def WriteValue(self, value, options):
         val = str(value[0]).upper()
-        if val == "C":
-            self.service.set_farenheit(False)
-        elif val == "F":
-            self.service.set_farenheit(True)
+        print(val)
 
     def ReadValue(self, options):
         value = []
-
-        if self.service.is_farenheit(): val = "F"
-        else: val = "C"
-        value.append(dbus.Byte(val.encode()))
-
+        #not implemented
         return value
 
-class UnitDescriptor(Descriptor):
-    UNIT_DESCRIPTOR_UUID = "2901"
-    UNIT_DESCRIPTOR_VALUE = "Temperature Units (F or C)"
-
-    def __init__(self, characteristic):
+class RaspberryDescriptor(Descriptor):
+    def __init__(self, characteristic, uuid, description, flags):
+        self.uuid = uuid
+        self.description = description
+        self.flags = flags
         Descriptor.__init__(
-                self, self.UNIT_DESCRIPTOR_UUID,
-                ["read"],
+                self, self.uuid,
+                self.flags,
                 characteristic)
 
     def ReadValue(self, options):
         value = []
-        desc = self.UNIT_DESCRIPTOR_VALUE
+        desc = self.description
 
         for c in desc:
             value.append(dbus.Byte(c.encode()))
@@ -226,7 +125,7 @@ app = Application()
 app.add_service(ThermometerService(0))
 app.register()
 
-adv = ThermometerAdvertisement(0)
+adv = SensorAdvertisement(0)
 adv.register()
 
 try:
