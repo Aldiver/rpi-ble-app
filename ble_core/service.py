@@ -120,12 +120,6 @@ class Service(dbus.service.Object):
     def get_bus(self):
         return self.bus
 
-    def get_next_index(self):
-        idx = self.next_index
-        self.next_index += 1
-
-        return idx
-
     @dbus.service.method(DBUS_PROP_IFACE,
                          in_signature='s',
                          out_signature='a{sv}')
@@ -147,7 +141,7 @@ class Characteristic(dbus.service.Object):
         self.service = service
         self.flags = flags
         self.descriptors = []
-        self.next_index = 0
+        self.next_index = index
         dbus.service.Object.__init__(self, self.bus, self.path)
 
     def get_properties(self):
@@ -224,7 +218,7 @@ class Characteristic(dbus.service.Object):
 
 class Descriptor(dbus.service.Object):
     def __init__(self, uuid, flags, characteristic):
-        index = characteristic.get_next_index()
+        index = characteristic.next_index
         self.path = characteristic.path + '/desc' + str(index)
         self.uuid = uuid
         self.flags = flags
