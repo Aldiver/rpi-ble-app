@@ -13,7 +13,7 @@ class SensorAdvertisement(Advertisement):
         self.add_local_name("Raspberry Pi 0") 
         self.include_tx_power = True
 
-class ThermometerService(Service):
+class RaspberryService(Service):
     RASPBERRY_SVC_UUID = "00000001-710e-4a5b-8d75-3e5b444bc3cf"
 
     def __init__(self, index):
@@ -35,17 +35,14 @@ class ThermometerService(Service):
 class OutboundCharacteristic(Characteristic):
 
     def __init__(self, service, uuid, flags):
-        self.uuid = uuid
-        self.flags = flags
-        self.service = service
         if "notify" in flags:
             self.notifying = False
         else:
             self.notifying = True
 
         Characteristic.__init__(
-                self, self.uuid,
-                self.flags, self.service)
+                self, service, uuid,
+                flags)
         self.add_descriptor(RaspberryDescriptor(self, "2901", "Temperature Descriptor", self.flags))
 
     def get_sensor_value(self):
@@ -86,11 +83,9 @@ class OutboundCharacteristic(Characteristic):
 class InboundCharacteristic(Characteristic):
 
     def __init__(self, service, uuid, flags):
-        self.uuid
-        self.flags
         Characteristic.__init__(
-                self, self.uuid,
-                ["read", "write"], service)
+                self, uuid,
+                flags, service)
         self.add_descriptor(RaspberryDescriptor(self, "2901", "Alert Descriptor", self.flags))
 
     def WriteValue(self, value, options):
@@ -104,12 +99,9 @@ class InboundCharacteristic(Characteristic):
 
 class RaspberryDescriptor(Descriptor):
     def __init__(self, characteristic, uuid, description, flags):
-        self.uuid = uuid
-        self.description = description
-        self.flags = flags
         Descriptor.__init__(
-                self, self.uuid,
-                self.flags,
+                self, uuid,
+                flags,
                 characteristic)
 
     def ReadValue(self, options):
@@ -122,7 +114,7 @@ class RaspberryDescriptor(Descriptor):
         return value
 
 app = Application()
-app.add_service(ThermometerService(0))
+app.add_service(RaspberryService(0))
 app.register()
 
 adv = SensorAdvertisement(0)
